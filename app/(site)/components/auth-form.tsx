@@ -1,10 +1,12 @@
 "use client";
 
-import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { BsGithub, BsGoogle } from "react-icons/bs";
+import axios from "axios";
+import toast from "react-hot-toast";
+import { signIn } from "next-auth/react";
 
-import { Button } from "@/components/ui/button";
 import {
   Form,
   FormControl,
@@ -16,7 +18,8 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useForm } from "react-hook-form";
-import { useCallback, useState } from "react";
+import { useState, useCallback } from "react";
+import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 
 type VariantType = "LOGIN" | "REGISTER";
@@ -34,13 +37,15 @@ const formSchema = z.object({
 export function AuthForm() {
   const [variant, setVariant] = useState<VariantType>("LOGIN");
   const [isLoading, setIsLoading] = useState(false);
+
   const toggleVariant = useCallback(() => {
     if (variant === "LOGIN") {
-      setVariant("LOGIN");
-    } else {
       setVariant("REGISTER");
+    } else {
+      setVariant("LOGIN");
     }
   }, [variant]);
+
   // 1. Define your form.
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -56,15 +61,50 @@ export function AuthForm() {
     setIsLoading(true);
     if (variant === "REGISTER") {
       // Axios REGISTER
+      await axios
+        .post("/api/register", values)
+        .catch(() => {
+          toast.error("Something went wrong.");
+        })
+        .finally(() => {
+          setIsLoading(false);
+        });
     }
     if (variant === "LOGIN") {
       // NextAuth SignIn
+      signIn("credentials", {
+        ...values,
+        redirect: false,
+      })
+        .then((callback) => {
+          if (callback?.error) {
+            toast.error("Invalid Credentials");
+          }
+          if (callback?.ok && !callback.error) {
+            toast.success("Logged In");
+          }
+        })
+        .finally(() => {
+          setIsLoading(false);
+        });
     }
   }
 
   const socialAction = (action: string) => {
     setIsLoading(true);
     // NextAuth Social SignIn
+    signIn(action, { redirect: false })
+      .then((callback) => {
+        if (callback?.error) {
+          toast.error("Invalid Credentials");
+        }
+        if (callback?.ok && !callback.error) {
+          toast.success("Logged In");
+        }
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
   };
 
   return (
@@ -72,26 +112,28 @@ export function AuthForm() {
       <div className='bg-white px-4 py-8 shadow sm:rounded-lg sm:px-10'>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className='space-y-8'>
-            <FormField
-              control={form.control}
-              name='name'
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Username</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder='Username'
-                      disabled={isLoading}
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    This is your public display name.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {variant === "REGISTER" && (
+              <FormField
+                control={form.control}
+                name='name'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Username</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder='Username'
+                        disabled={isLoading}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      This is your public display name.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             <FormField
               control={form.control}
@@ -159,11 +201,19 @@ export function AuthForm() {
           </div>
         </div>
         <div className='flex gap-2 justify-center items-center'>
-          <Button variant={"outline"} className='w-full'>
+          <Button
+            onClick={() => socialAction("github")}
+            variant={"outline"}
+            className='w-full'
+          >
             <BsGithub className='mr-2 text-gray-400' />
             Github
           </Button>
-          <Button variant={"outline"} className='w-full'>
+          <Button
+            onClick={() => socialAction("google")}
+            variant={"outline"}
+            className='w-full'
+          >
             <BsGoogle className='mr-2 text-gray-400' />
             Google
           </Button>
