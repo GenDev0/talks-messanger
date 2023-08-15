@@ -5,7 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { BsGithub, BsGoogle } from "react-icons/bs";
 import axios from "axios";
 import toast from "react-hot-toast";
-import { signIn } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
 
 import {
   Form,
@@ -18,25 +18,38 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useForm } from "react-hook-form";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { useRouter } from "next/navigation";
 
 type VariantType = "LOGIN" | "REGISTER";
 
 const formSchema = z.object({
-  name: z.string().min(2, {
-    message: "Username must be at least 2 characters.",
-  }),
+  name: z
+    .union([
+      z.string().length(0),
+      z.string().min(2, "Username must be at least 2 characters."),
+    ])
+    .optional(),
   email: z.string().email(),
   password: z.string().min(3, {
-    message: "Username must be at least 3 characters.",
+    message: "Password must be at least 3 characters.",
   }),
 });
 
 export function AuthForm() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
   const [variant, setVariant] = useState<VariantType>("LOGIN");
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (status === "authenticated") {
+      router.push("/users");
+      console.log(session?.user);
+    }
+  }, [status, router]);
 
   const toggleVariant = useCallback(() => {
     if (variant === "LOGIN") {
@@ -63,6 +76,9 @@ export function AuthForm() {
       // Axios REGISTER
       await axios
         .post("/api/register", values)
+        .then(() => {
+          signIn("credentials", values);
+        })
         .catch(() => {
           toast.error("Something went wrong.");
         })
@@ -81,6 +97,7 @@ export function AuthForm() {
             toast.error("Invalid Credentials");
           }
           if (callback?.ok && !callback.error) {
+            router.push("/users");
             toast.success("Logged In");
           }
         })
@@ -124,6 +141,8 @@ export function AuthForm() {
                         placeholder='Username'
                         disabled={isLoading}
                         {...field}
+                        value={field.value !== null ? field.value : ""}
+                        onChange={field.onChange}
                       />
                     </FormControl>
                     <FormDescription>
@@ -179,7 +198,7 @@ export function AuthForm() {
             <Button
               disabled={isLoading}
               type='submit'
-              className='bg-sky-500 hover:bg-sky-600'
+              className='bg-sky-500 hover:bg-sky-600 w-full'
             >
               {isLoading
                 ? "Submitting..."
